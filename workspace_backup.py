@@ -69,12 +69,25 @@ manifest = lib.backup_workspace(w, volume_path=VOLUME_PATH, roots=ROOTS, exclude
 
 # COMMAND ----------
 
+# DBTITLE 1,Summary and retention
 if manifest["archives"]:
     display(spark.createDataFrame([(a["archive"], a["objects"], a["zip_bytes"]) for a in manifest["archives"]],
                                   "archive string, objects int, zip_bytes long"))
 t = manifest["totals"]
 print(f"done: {t['exported']} object(s) in {t['archives']} zip(s), {t['failed']} failed, "
       f"{t['skipped']} skipped -> {manifest['folder']}")
+# skipped breakdown: entries look like "<path> (<reason>)"; service principal homes are counted, not listed
+from collections import defaultdict
+by_reason = defaultdict(list)
+for s in manifest.get("skipped", []):
+    path, _, reason = s.rpartition(" (")
+    reason = reason.rstrip(")").split(":")[0].strip() or "unknown"
+    by_reason[reason].append(path or s)
+for reason, paths in sorted(by_reason.items(), key=lambda kv: -len(kv[1])):
+    print(f"skipped [{reason}]: {len(paths)}")
+    if reason != "service principal home":
+        for p in sorted(paths):
+            print("   " + p)
 failed = [o for o in manifest["objects"] if o["status"] != "ok"]
 if failed:
     print(f"retention: skipped because {len(failed)} object(s) failed — older backups are kept")

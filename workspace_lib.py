@@ -40,6 +40,8 @@ from databricks.sdk.service.workspace import ExportFormat, ImportFormat, Languag
 DEFAULT_ROOTS = ["/Users", "/Shared"]
 DEFAULT_EXCLUDES = ["*/.bundle", "*/.bundle/*"]   # bundle deploy folders: recreated by `bundle deploy`
 EXPORTABLE = {ObjectType.NOTEBOOK, ObjectType.FILE, ObjectType.DASHBOARD}
+# Types the SDK's ObjectType enum doesn't know yet (object_type comes back None); exported with ExportFormat.AUTO.
+EXPORTABLE_RAW = {"ALERT", "DESIGNER_FILE"}
 LANG_EXT = {"PYTHON": "py", "SQL": "sql", "SCALA": "scala", "R": "r"}
 MANIFEST = "_manifest.json"
 # Service principal home folders are /Users/<applicationId> (a UUID); human users are /Users/<email>.
@@ -56,6 +58,17 @@ def log(msg: str) -> None:
 
 def _name(v) -> str:
     return getattr(v, "value", v) if v is not None else ""
+
+
+def _raw_type(w, o) -> str:
+    """Object type name, even when the SDK enum doesn't know it (object_type None, e.g. ALERT)."""
+    if o.object_type is not None:
+        return _name(o.object_type)
+    try:
+        return w.api_client.do("GET", "/api/2.0/workspace/get-status",
+                               query={"path": o.path}).get("object_type", "")
+    except Exception:
+        return ""
 
 
 def excluded(path: str, patterns: list[str]) -> bool:
@@ -113,7 +126,12 @@ def walk(w, root: str, excludes: list[str], include_git_folders: bool,
             elif o.object_type in EXPORTABLE:
                 objects.append(o)
             else:
-                skipped.append(f"{o.path} ({_name(o.object_type)} not exportable)")
+                raw = _raw_type(w, o)
+                if raw in EXPORTABLE_RAW:
+                    o.object_type = raw   # plain string; _name() and export_bytes() (AUTO) handle it
+                    objects.append(o)
+                else:
+                    skipped.append(f"{o.path} ({raw} not exportable)")
     return objects, skipped
 
 
@@ -137,6 +155,9 @@ def entry_name(o, group: str) -> str:
 
 
 def export_bytes(w, o) -> bytes:
+    if o.object_type == ObjectType.FILE:
+        # Workspace files are read from the /Workspace mount: the Export API caps responses at 50 MiB.
+        return Path("/Workspace" + o.path).read_bytes()
     fmt = ExportFormat.SOURCE if o.object_type == ObjectType.NOTEBOOK else ExportFormat.AUTO
     return base64.b64decode(w.workspace.export(o.path, format=fmt).content or b"")
 

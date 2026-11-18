@@ -14,8 +14,8 @@ These notebooks copy every user's home folder (`/Users/<email>`) and `/Shared` i
 | Backed up | Not backed up |
 | --- | --- |
 | Notebooks (source code, no cell outputs) | Folder and notebook permissions (ACLs) |
-| Workspace files | Genie / Databricks One chat history |
-| AI/BI dashboards stored in the workspace tree | Jobs, SQL queries, Genie spaces, alerts |
+| Workspace files, including large ones (read from `/Workspace`, past the 50 MiB export limit) | Genie / Databricks One chat history |
+| AI/BI dashboards, SQL alerts, and designer files stored in the workspace tree | Jobs, SQL queries, Genie spaces |
 | `/Users/<email>` and `/Shared` | Unity Catalog grants and ownership |
 | | Git folders (skipped by default; their code is in Git) |
 | | Service principal home folders (skipped by default) |
